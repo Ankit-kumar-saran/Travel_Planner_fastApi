@@ -1,0 +1,15 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pymysql>=1.1
+# Needed by pymysql to log in to MySQL 8 users that use caching_sha2_password
+cryptography>=42
+pydantic[email]>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+python-jose[cryptography]>=3.3
+# We use bcrypt directly (passlib is unmaintained and breaks with new bcrypt versions)
+bcrypt>=4.1
+# HTTP client used to call Google Places / OpenStreetMap
+httpx>=0.27
+# Only needed to run the tests
+pytest>=8.0
