@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <div class="card narrow">
+      <h1>Create account</h1>
+      <div id="msg" class="msg"></div>
+      <form id="register-form">
+        <div class="field">
+          <label for="name">Name</label>
+          <input id="name" type="text" minlength="2" maxlength="50" required>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" required>
+        </div>
+        <div class="field">
+          <label for="password">Password (at least 6 characters)</label>
+          <input id="password" type="password" minlength="6" required>
+        </div>
+        <button type="submit" id="submit-btn">Register</button>
+      </form>
+      <p class="small">Already have an account? <a href="login.html">Login</a></p>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    renderNav("register");
+    const msg = document.getElementById("msg");
+    const email = document.getElementById("email");
+    const password = document.getElementById("password");
+
+    document.getElementById("register-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      const button = document.getElementById("submit-btn");
+      button.disabled = true;
+      showMessage(msg, "");
+      try {
+        await api("/auth/register", {
+          method: "POST",
+          auth: false,
+          body: {
+            name: document.getElementById("name").value.trim(),
+            email: email.value.trim(),
+            password: password.value,
+          },
+        });
+        // Log in straight away so the user does not have to type the details again
+        const login = await api("/auth/login", {
+          method: "POST",
+          auth: false,
+          body: { email: email.value.trim(), password: password.value },
+        });
+        localStorage.setItem("token", login.access_token);
+        const me = await api("/users/me");
+        saveLogin(login.access_token, me);
+        window.location.href = "index.html";
+      } catch (err) {
+        clearLogin();
+        showMessage(msg, err.message, "error");
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

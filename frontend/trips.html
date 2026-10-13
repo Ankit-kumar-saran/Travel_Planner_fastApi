@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Trips - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <h1>My trips</h1>
+    <div id="msg" class="msg"></div>
+
+    <div class="two-col">
+      <div class="card">
+        <h3>Create a trip</h3>
+        <form id="trip-form">
+          <div class="field">
+            <label for="city">Destination city</label>
+            <select id="city" required></select>
+            <div class="muted small">Only cities already saved in the database are listed. Search a city on the Explore page first.</div>
+          </div>
+          <div class="field">
+            <label for="budget">Planned budget (₹)</label>
+            <input id="budget" type="number" min="0" step="0.01" value="0">
+          </div>
+          <div class="row">
+            <div><label for="start">Start date</label><input id="start" type="date"></div>
+            <div><label for="end">End date</label><input id="end" type="date"></div>
+          </div>
+          <button type="submit" style="margin-top:12px;">Create trip</button>
+        </form>
+      </div>
+
+      <div>
+        <div id="trip-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    if (requireLogin()) {
+      renderNav("trips");
+      const msg = document.getElementById("msg");
+      const tripList = document.getElementById("trip-list");
+
+      async function loadCities() {
+        const cities = await api("/cities", { auth: false });
+        const select = document.getElementById("city");
+        select.innerHTML = cities.length
+          ? cities.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + "</option>"; }).join("")
+          : '<option value="">(no cities yet)</option>';
+      }
+
+      async function loadTrips() {
+        const trips = await api("/trips");
+        tripList.innerHTML = trips.length
+          ? trips.map(function (t) {
+              const dates = t.start_date ? esc(t.start_date) + " to " + esc(t.end_date || "?") : "No dates set";
+              return (
+                '<div class="card">' +
+                '<h3><a href="trip.html?id=' + t.trip_id + '">' + esc(t.city) + " (trip #" + t.trip_id + ")</a></h3>" +
+                '<div class="muted small">' + dates + "</div>" +
+                "<div>Budget: <strong>" + money(t.planned_budget) + "</strong></div>" +
+                '<div style="margin-top:10px;">' +
+                '<a class="btn" href="trip.html?id=' + t.trip_id + '">Open</a> ' +
+                '<button class="danger" data-delete="' + t.trip_id + '">Delete</button></div></div>'
+              );
+            }).join("")
+          : '<p class="muted">You have no trips yet. Create your first one.</p>';
+      }
+
+      document.getElementById("trip-form").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        showMessage(msg, "");
+        const start = document.getElementById("start").value;
+        const end = document.getElementById("end").value;
+        try {
+          const trip = await api("/trips", {
+            method: "POST",
+            body: {
+              city_id: Number(document.getElementById("city").value),
+              planned_budget: Number(document.getElementById("budget").value || 0),
+              start_date: start || null,
+              end_date: end || null,
+            },
+          });
+          window.location.href = "trip.html?id=" + trip.trip_id;
+        } catch (err) {
+          showMessage(msg, err.message, "error");
+        }
+      });
+
+      tripList.addEventListener("click", async function (event) {
+        const id = event.target.getAttribute("data-delete");
+        if (!id) return;
+        if (!confirm("Delete this trip with all its stops and expenses?")) return;
+        try {
+          await api("/trips/" + id, { method: "DELETE" });
+          loadTrips();
+        } catch (err) {
+          showMessage(msg, err.message, "error");
+        }
+      });
+
+      Promise.all([loadCities(), loadTrips()]).catch(function (err) { showMessage(msg, err.message, "error"); });
+    }
+  </script>
+</body>
+</html>

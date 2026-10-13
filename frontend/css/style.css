@@ -1,0 +1,108 @@
+/* WanderSync - one simple stylesheet shared by every page */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: #f4f6f8;
+  color: #1f2933;
+  line-height: 1.5;
+}
+
+a { color: #0b6bcb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.wrap { max-width: 1050px; margin: 0 auto; padding: 0 16px; }
+
+/* ---------- Header / navigation ---------- */
+header { background: #12355b; color: #fff; }
+header .wrap { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 12px; padding-bottom: 12px; }
+.brand { font-size: 1.3rem; font-weight: 700; color: #fff; }
+.brand:hover { text-decoration: none; }
+nav { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+nav a { color: #d7e6f7; }
+nav a.active { color: #fff; font-weight: 700; border-bottom: 2px solid #fff; }
+nav .who { color: #9fc0e6; font-size: 0.9rem; }
+
+main { padding-top: 20px; padding-bottom: 40px; }
+h1 { margin: 0 0 14px; font-size: 1.6rem; }
+h2 { margin: 24px 0 10px; font-size: 1.2rem; }
+h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.muted { color: #6b7785; }
+.small { font-size: 0.85rem; }
+
+/* ---------- Cards and layout ---------- */
+.card { background: #fff; border: 1px solid #dde3ea; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.narrow { max-width: 420px; margin: 30px auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.row > * { flex: 1 1 140px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+
+.place-card h3 a { color: #12355b; }
+.place-card .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+
+/* ---------- Forms ---------- */
+label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+input, select, textarea {
+  width: 100%; padding: 8px 10px; font: inherit;
+  border: 1px solid #c3ccd6; border-radius: 6px; background: #fff;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid #9cc4ee; border-color: #0b6bcb; }
+textarea { resize: vertical; min-height: 70px; }
+.field { margin-bottom: 12px; }
+
+button, .btn {
+  display: inline-block; padding: 8px 14px; font: inherit; font-weight: 600;
+  background: #0b6bcb; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+}
+button:hover, .btn:hover { background: #0955a3; text-decoration: none; }
+button:disabled { background: #9aa7b5; cursor: not-allowed; }
+button.secondary { background: #e4e9ef; color: #1f2933; }
+button.secondary:hover { background: #d3dae2; }
+button.danger { background: #c62828; }
+button.danger:hover { background: #a31f1f; }
+button.small-btn { padding: 3px 8px; font-size: 0.85rem; }
+
+/* ---------- Messages and badges ---------- */
+.msg { display: none; padding: 10px 12px; border-radius: 6px; margin-bottom: 14px; }
+.msg.error { background: #fdecea; color: #8a1c1c; border: 1px solid #f5c2c0; }
+.msg.success { background: #e8f6ec; color: #1d5c2e; border: 1px solid #b7e0c2; }
+.msg.info { background: #e8f1fb; color: #1b4a7a; border: 1px solid #bcd6f1; }
+
+.badge { display: inline-block; padding: 2px 8px; font-size: 0.78rem; font-weight: 600; border-radius: 999px; background: #e4e9ef; color: #3b4754; }
+.badge.Hotel { background: #e3ecfb; color: #1b4a9a; }
+.badge.Restaurant { background: #fdebd8; color: #8a4b0c; }
+.badge.Attraction { background: #e1f4e7; color: #1d6b3a; }
+.badge.cache { background: #e1f4e7; color: #1d6b3a; }
+.badge.api { background: #fdebd8; color: #8a4b0c; }
+
+/* ---------- Tables ---------- */
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e6ebf0; }
+th { background: #f0f3f7; font-size: 0.85rem; }
+td.actions { white-space: nowrap; text-align: right; }
+
+/* ---------- Budget bar ---------- */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.stat { background: #f0f3f7; border-radius: 8px; padding: 10px 12px; }
+.stat .label { font-size: 0.78rem; color: #6b7785; text-transform: uppercase; letter-spacing: 0.03em; }
+.stat .value { font-size: 1.3rem; font-weight: 700; }
+.bar-outer { background: #e4e9ef; border-radius: 999px; height: 16px; overflow: hidden; }
+.bar-inner { background: #2e9e5b; height: 100%; }
+.bar-inner.warn { background: #e0a100; }
+.bar-inner.over { background: #c62828; }
+
+/* ---------- 7-day activity chart (admin) ---------- */
+.chart { display: flex; align-items: flex-end; gap: 10px; height: 180px; padding-top: 10px; }
+.chart-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.chart-bar { width: 70%; background: #0b6bcb; border-radius: 4px 4px 0 0; min-height: 2px; }
+.chart-bar.zero { background: #c3ccd6; }
+.chart-val { font-size: 0.85rem; font-weight: 700; margin-bottom: 3px; }
+.chart-label { font-size: 0.78rem; color: #6b7785; margin-top: 4px; }
+
+.review { border-top: 1px solid #e6ebf0; padding: 10px 0; }
+.review:first-child { border-top: 0; }
+.hidden { display: none !important; }

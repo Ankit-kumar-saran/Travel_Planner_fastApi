@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trip - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <p class="small"><a href="trips.html">&larr; All trips</a></p>
+    <div id="msg" class="msg"></div>
+
+    <div class="card">
+      <h1 id="trip-title">Trip</h1>
+      <div id="trip-dates" class="muted"></div>
+
+      <h3 style="margin-top:14px;">Budget</h3>
+      <div class="stats" id="stats"></div>
+      <div class="bar-outer"><div id="bar" class="bar-inner" style="width:0%"></div></div>
+      <div id="bar-text" class="muted small" style="margin-top:4px;"></div>
+    </div>
+
+    <h2>Itinerary</h2>
+    <div id="days"></div>
+
+    <h2>Expenses</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3>Log an expense</h3>
+        <form id="expense-form">
+          <div class="row">
+            <div><label for="e-amount">Amount (₹)</label><input id="e-amount" type="number" min="0.01" step="0.01" required></div>
+            <div>
+              <label for="e-category">Category</label>
+              <select id="e-category">
+                <option>Food</option><option>Travel</option><option>Shopping</option><option>Tickets</option><option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <div><label for="e-date">Date</label><input id="e-date" type="date" required></div>
+            <div><label for="e-note">Note (optional)</label><input id="e-note" maxlength="255"></div>
+          </div>
+          <button type="submit" style="margin-top:12px;">Add expense</button>
+        </form>
+        <h3 style="margin-top:18px;">By category</h3>
+        <div id="by-category" class="muted small"></div>
+      </div>
+      <div class="card">
+        <h3>Expense history</h3>
+        <div id="expenses"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    if (requireLogin()) {
+      renderNav("trips");
+
+      const tripId = param("id");
+      const msg = document.getElementById("msg");
+      const daysBox = document.getElementById("days");
+      let stops = [];
+
+      // Today's date as YYYY-MM-DD (default for the expense form)
+      document.getElementById("e-date").value = new Date().toISOString().slice(0, 10);
+
+      // ---------- Trip, budget and stops ----------
+
+      async function loadTrip() {
+        const data = await api("/trips/" + tripId);
+        stops = data.stops;
+
+        document.title = data.trip.city + " trip - WanderSync";
+        document.getElementById("trip-title").textContent = data.trip.city + " (trip #" + data.trip.trip_id + ")";
+        document.getElementById("trip-dates").textContent = data.trip.start_date
+          ? data.trip.start_date + " to " + (data.trip.end_date || "?")
+          : "No dates set";
+
+        const b = data.budget;
+        document.getElementById("stats").innerHTML =
+          stat("Planned budget", money(b.planned_budget)) +
+          stat("Itinerary cost", money(b.itinerary_cost)) +
+          stat("Actually spent", money(b.actual_spent)) +
+          stat("Remaining", money(b.remaining));
+
+        const bar = document.getElementById("bar");
+        bar.style.width = Math.min(100, b.percent_spent) + "%";
+        bar.className = "bar-inner" + (b.percent_spent > 100 ? " over" : b.percent_spent > 80 ? " warn" : "");
+        document.getElementById("bar-text").textContent = b.planned_budget > 0
+          ? b.percent_spent + "% of the planned budget spent"
+          : "Set a planned budget to see the usage bar.";
+
+        renderDays();
+      }
+
+      function stat(label, value) {
+        return '<div class="stat"><div class="label">' + label + '</div><div class="value">' + value + "</div></div>";
+      }
+
+      function renderDays() {
+        if (!stops.length) {
+          daysBox.innerHTML = '<p class="muted">No stops yet. Open a place from <a href="index.html">Explore</a> and use "Add to a trip".</p>';
+          return;
+        }
+        // Group the stops by day number
+        const byDay = {};
+        stops.forEach(function (s) {
+          (byDay[s.day_number] = byDay[s.day_number] || []).push(s);
+        });
+        daysBox.innerHTML = Object.keys(byDay)
+          .map(Number)
+          .sort(function (a, b) { return a - b; })
+          .map(function (day) {
+            const list = byDay[day];
+            const total = list.reduce(function (sum, s) { return sum + Number(s.planned_cost || 0); }, 0);
+            return (
+              '<div class="card"><div class="row" style="align-items:center;">' +
+              "<h3 style=\"margin:0;\">Day " + day + ' <span class="muted small">(' + money(total) + ")</span></h3>" +
+              '<div style="text-align:right;"><button class="secondary small-btn" data-optimize="' + day + '">Optimise by distance</button></div></div>' +
+              '<table style="margin-top:10px;"><tr><th>#</th><th>Place</th><th>Category</th><th>Cost</th><th></th></tr>' +
+              list.map(function (s, index) {
+                return (
+                  "<tr><td>" + s.visit_order + "</td>" +
+                  '<td><a href="place.html?id=' + s.place_id + '">' + esc(s.place_name) + "</a></td>" +
+                  '<td><span class="badge ' + esc(s.category) + '">' + esc(s.category) + "</span></td>" +
+                  "<td>" + money(s.planned_cost) + "</td>" +
+                  '<td class="actions">' +
+                  '<button class="secondary small-btn" data-up="' + s.id + '" data-day="' + day + '"' + (index === 0 ? " disabled" : "") + ">▲</button> " +
+                  '<button class="secondary small-btn" data-down="' + s.id + '" data-day="' + day + '"' + (index === list.length - 1 ? " disabled" : "") + ">▼</button> " +
+                  '<button class="danger small-btn" data-remove="' + s.id + '">✕</button></td></tr>'
+                );
+              }).join("") +
+              "</table></div>"
+            );
+          })
+          .join("");
+      }
+
+      // One click listener for every button inside the itinerary
+      daysBox.addEventListener("click", async function (event) {
+        const t = event.target;
+        showMessage(msg, "");
+        try {
+          if (t.hasAttribute("data-optimize")) {
+            await api("/trips/" + tripId + "/days/" + t.getAttribute("data-optimize") + "/optimize", { method: "POST" });
+          } else if (t.hasAttribute("data-remove")) {
+            if (!confirm("Remove this stop?")) return;
+            await api("/trips/" + tripId + "/places/" + t.getAttribute("data-remove"), { method: "DELETE" });
+          } else if (t.hasAttribute("data-up") || t.hasAttribute("data-down")) {
+            await moveStop(Number(t.getAttribute("data-day")), Number(t.getAttribute("data-up") || t.getAttribute("data-down")), t.hasAttribute("data-up") ? -1 : 1);
+          } else {
+            return;
+          }
+          loadTrip();
+        } catch (err) {
+          showMessage(msg, err.message, "error");
+        }
+      });
+
+      // Swap a stop with its neighbour, then send the full new order of that day
+      async function moveStop(day, stopId, direction) {
+        const ids = stops
+          .filter(function (s) { return s.day_number === day; })
+          .map(function (s) { return s.id; });
+        const from = ids.indexOf(stopId);
+        const to = from + direction;
+        if (to < 0 || to >= ids.length) return;
+        const moved = ids.splice(from, 1)[0];
+        ids.splice(to, 0, moved);
+        await api("/trips/" + tripId + "/days/" + day + "/order", { method: "PUT", body: { stop_ids: ids } });
+      }
+
+      // ---------- Expenses ----------
+
+      async function loadExpenses() {
+        const list = await api("/trips/" + tripId + "/expenses");
+        document.getElementById("expenses").innerHTML = list.length
+          ? "<table><tr><th>Date</th><th>Category</th><th>Amount</th><th></th></tr>" +
+            list.map(function (e) {
+              return (
+                "<tr><td>" + esc(e.spent_date) + "</td>" +
+                "<td>" + esc(e.category) + (e.note ? '<div class="muted small">' + esc(e.note) + "</div>" : "") + "</td>" +
+                "<td>" + money(e.amount) + "</td>" +
+                '<td class="actions"><button class="danger small-btn" data-del-expense="' + e.id + '">✕</button></td></tr>'
+              );
+            }).join("") + "</table>"
+          : '<p class="muted">No expenses logged yet.</p>';
+
+        const summary = await api("/trips/" + tripId + "/expenses/summary");
+        document.getElementById("by-category").innerHTML = summary.length
+          ? summary.map(function (r) { return esc(r.category) + ": <strong>" + money(r.total) + "</strong>"; }).join("<br>")
+          : "Nothing yet.";
+      }
+
+      document.getElementById("expenses").addEventListener("click", async function (event) {
+        const id = event.target.getAttribute("data-del-expense");
+        if (!id) return;
+        try {
+          await api("/trips/" + tripId + "/expenses/" + id, { method: "DELETE" });
+          await Promise.all([loadExpenses(), loadTrip()]);
+        } catch (err) {
+          showMessage(msg, err.message, "error");
+        }
+      });
+
+      document.getElementById("expense-form").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        showMessage(msg, "");
+        try {
+          await api("/trips/" + tripId + "/expenses", {
+            method: "POST",
+            body: {
+              amount: Number(document.getElementById("e-amount").value),
+              category: document.getElementById("e-category").value,
+              spent_date: document.getElementById("e-date").value,
+              note: document.getElementById("e-note").value.trim() || null,
+            },
+          });
+          document.getElementById("e-amount").value = "";
+          document.getElementById("e-note").value = "";
+          await Promise.all([loadExpenses(), loadTrip()]);     // refresh the budget bar too
+        } catch (err) {
+          showMessage(msg, err.message, "error");
+        }
+      });
+
+      // ---------- Start ----------
+      if (!tripId) {
+        showMessage(msg, "No trip selected.", "error");
+      } else {
+        Promise.all([loadTrip(), loadExpenses()]).catch(function (err) { showMessage(msg, err.message, "error"); });
+      }
+    }
+  </script>
+</body>
+</html>

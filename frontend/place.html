@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Place - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <div id="msg" class="msg"></div>
+    <div id="place-box" class="card"><p class="muted">Loading...</p></div>
+
+    <div class="two-col">
+      <div>
+        <!-- Add to a trip -->
+        <div class="card" id="trip-card">
+          <h3>Add to a trip</h3>
+          <div id="trip-msg" class="msg"></div>
+          <div id="trip-body"></div>
+        </div>
+
+        <!-- Frequently saved together -->
+        <div class="card">
+          <h3>Frequently saved together</h3>
+          <div id="recs" class="muted">Loading...</div>
+        </div>
+      </div>
+
+      <div>
+        <!-- Reviews -->
+        <div class="card">
+          <h3>Reviews</h3>
+          <div id="review-summary" class="muted small"></div>
+          <div id="review-msg" class="msg"></div>
+          <div id="review-form-box"></div>
+          <div id="reviews"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    renderNav();
+
+    const placeId = param("id");
+    const msg = document.getElementById("msg");
+    const me = getUser();
+    let place = null;
+    let isFavorite = false;
+    let myReview = null;
+
+    // ---------- Place details + favorite button ----------
+
+    function renderPlace() {
+      document.title = place.name + " - WanderSync";
+      const mapUrl = "https://www.openstreetmap.org/?mlat=" + place.latitude + "&mlon=" + place.longitude + "#map=16/" + place.latitude + "/" + place.longitude;
+      document.getElementById("place-box").innerHTML =
+        "<h1>" + esc(place.name) + "</h1>" +
+        '<div class="row" style="align-items:center;">' +
+        '<span class="badge ' + esc(place.category) + '" style="flex:0 0 auto;">' + esc(place.category) + "</span>" +
+        '<span style="flex:0 0 auto;">' + esc(place.city) + "</span>" +
+        '<span style="flex:0 0 auto;">' + stars(place.rating) + "</span>" +
+        '<span style="flex:0 0 auto;">Avg cost: ' + (Number(place.avg_cost) > 0 ? money(place.avg_cost) : "n.a.") + "</span>" +
+        '<span style="flex:0 0 auto;" class="muted small">' + esc(place.latitude) + ", " + esc(place.longitude) + "</span>" +
+        '<a style="flex:0 0 auto;" href="' + mapUrl + '" target="_blank" rel="noopener">View on map</a>' +
+        '<span style="flex:1 1 auto; text-align:right;"><button id="fav-btn" class="secondary"></button></span>' +
+        "</div>";
+      document.getElementById("fav-btn").addEventListener("click", toggleFavorite);
+      updateFavButton();
+    }
+
+    function updateFavButton() {
+      const button = document.getElementById("fav-btn");
+      button.textContent = isFavorite ? "♥ Saved (click to remove)" : "♡ Save to favorites";
+    }
+
+    async function toggleFavorite() {
+      if (!requireLogin()) return;
+      showMessage(msg, "");
+      try {
+        if (isFavorite) {
+          await api("/favorites/" + placeId, { method: "DELETE" });
+        } else {
+          await api("/favorites", { method: "POST", body: { place_id: Number(placeId) } });
+        }
+        isFavorite = !isFavorite;
+        updateFavButton();
+        loadRecommendations();
+      } catch (err) {
+        showMessage(msg, err.message, "error");
+      }
+    }
+
+    // ---------- Frequently saved together (self-join on the server) ----------
+
+    async function loadRecommendations() {
+      const box = document.getElementById("recs");
+      try {
+        const data = await api("/places/" + placeId + "/recommendations", { auth: false });
+        if (!data.recommendations.length) {
+          box.textContent = data.message || "Not enough favorite history yet";
+          return;
+        }
+        box.innerHTML = data.recommendations
+          .map(function (p) {
+            return (
+              '<div style="margin-bottom:8px;"><a href="place.html?id=' + p.place_id + '">' + esc(p.name) + "</a> " +
+              '<span class="badge ' + esc(p.category) + '">' + esc(p.category) + "</span> " +
+              '<span class="muted small">saved together by ' + esc(p.co_count) + " user(s)</span></div>"
+            );
+          })
+          .join("");
+      } catch (err) {
+        box.textContent = err.message;
+      }
+    }
+
+    // ---------- Reviews ----------
+
+    async function loadReviews() {
+      const data = await api("/places/" + placeId + "/reviews", { auth: false });
+      myReview = me ? data.reviews.find(function (r) { return r.user_id === me.user_id; }) || null : null;
+
+      document.getElementById("review-summary").textContent = data.review_count
+        ? data.review_count + " review(s), average " + Number(data.average_rating).toFixed(1) + " / 5"
+        : "No reviews yet.";
+
+      document.getElementById("reviews").innerHTML = data.reviews
+        .map(function (r) {
+          return (
+            '<div class="review"><strong>' + esc(r.user_name) + "</strong> &middot; " + stars(r.rating) +
+            ' <span class="muted small">' + esc((r.created_at || "").replace("T", " ").slice(0, 16)) + "</span>" +
+            "<div>" + esc(r.comment || "") + "</div></div>"
+          );
+        })
+        .join("");
+
+      renderReviewForm();
+    }
+
+    function renderReviewForm() {
+      const box = document.getElementById("review-form-box");
+      if (!isLoggedIn()) {
+        box.innerHTML = '<p class="small"><a href="login.html?next=' + encodeURIComponent("place.html?id=" + placeId) + '">Log in</a> to write a review.</p>';
+        return;
+      }
+      box.innerHTML =
+        '<form id="review-form">' +
+        '<div class="field"><label for="r-rating">Your rating (0 to 5)</label>' +
+        '<input id="r-rating" type="number" min="0" max="5" step="0.5" required></div>' +
+        '<div class="field"><label for="r-comment">Comment</label><textarea id="r-comment" maxlength="2000"></textarea></div>' +
+        '<button type="submit">' + (myReview ? "Update my review" : "Post review") + "</button> " +
+        (myReview ? '<button type="button" id="r-delete" class="danger">Delete</button>' : "") +
+        "</form>";
+
+      if (myReview) {
+        document.getElementById("r-rating").value = myReview.rating;
+        document.getElementById("r-comment").value = myReview.comment || "";
+        document.getElementById("r-delete").addEventListener("click", deleteReview);
+      }
+      document.getElementById("review-form").addEventListener("submit", saveReview);
+    }
+
+    async function saveReview(event) {
+      event.preventDefault();
+      const reviewMsg = document.getElementById("review-msg");
+      showMessage(reviewMsg, "");
+      const body = {
+        rating: Number(document.getElementById("r-rating").value),
+        comment: document.getElementById("r-comment").value.trim() || null,
+      };
+      try {
+        if (myReview) {
+          await api("/reviews/" + myReview.id, { method: "PUT", body: body });
+        } else {
+          await api("/places/" + placeId + "/reviews", { method: "POST", body: body });
+        }
+        await loadReviews();
+        showMessage(reviewMsg, "Review saved.", "success");
+      } catch (err) {
+        showMessage(reviewMsg, err.message, "error");
+      }
+    }
+
+    async function deleteReview() {
+      if (!confirm("Delete your review?")) return;
+      try {
+        await api("/reviews/" + myReview.id, { method: "DELETE" });
+        await loadReviews();
+      } catch (err) {
+        showMessage(document.getElementById("review-msg"), err.message, "error");
+      }
+    }
+
+    // ---------- Add this place to one of my trips ----------
+
+    async function loadTripForm() {
+      const body = document.getElementById("trip-body");
+      if (!isLoggedIn()) {
+        body.innerHTML = '<p class="small"><a href="login.html?next=' + encodeURIComponent("place.html?id=" + placeId) + '">Log in</a> to plan trips.</p>';
+        return;
+      }
+      const trips = (await api("/trips")).filter(function (t) { return t.city === place.city; });
+      if (!trips.length) {
+        body.innerHTML = '<p class="small">You have no trip to ' + esc(place.city) + ' yet. <a href="trips.html">Create one</a>.</p>';
+        return;
+      }
+      body.innerHTML =
+        '<form id="trip-form">' +
+        '<div class="field"><label for="t-trip">Trip</label><select id="t-trip">' +
+        trips.map(function (t) {
+          return '<option value="' + t.trip_id + '">Trip #' + t.trip_id + " - " + esc(t.city) + (t.start_date ? " (" + esc(t.start_date) + ")" : "") + "</option>";
+        }).join("") +
+        "</select></div>" +
+        '<div class="row"><div><label for="t-day">Day number</label><input id="t-day" type="number" min="1" value="1" required></div>' +
+        '<div><label for="t-cost">Planned cost (optional)</label><input id="t-cost" type="number" min="0" step="0.01" placeholder="' + esc(place.avg_cost || 0) + '"></div></div>' +
+        '<button type="submit" style="margin-top:10px;">Add to trip</button></form>';
+
+      document.getElementById("trip-form").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const tripMsg = document.getElementById("trip-msg");
+        showMessage(tripMsg, "");
+        const cost = document.getElementById("t-cost").value;
+        const tripId = document.getElementById("t-trip").value;
+        try {
+          await api("/trips/" + tripId + "/places", {
+            method: "POST",
+            body: {
+              place_id: Number(placeId),
+              day_number: Number(document.getElementById("t-day").value),
+              planned_cost: cost === "" ? null : Number(cost),
+            },
+          });
+          tripMsg.innerHTML = "Added! <a href=\"trip.html?id=" + tripId + "\">Open the trip</a>";
+          tripMsg.className = "msg success";
+          tripMsg.style.display = "block";
+        } catch (err) {
+          showMessage(tripMsg, err.message, "error");
+        }
+      });
+    }
+
+    // ---------- Start ----------
+
+    async function start() {
+      if (!placeId) {
+        showMessage(msg, "No place selected.", "error");
+        return;
+      }
+      try {
+        place = await api("/places/" + placeId, { auth: false });
+      } catch (err) {
+        document.getElementById("place-box").innerHTML = "";
+        showMessage(msg, err.message, "error");
+        return;
+      }
+      if (isLoggedIn()) {
+        try {
+          const favs = await api("/favorites");
+          isFavorite = favs.some(function (f) { return String(f.place_id) === String(placeId); });
+        } catch (err) { /* ignore: button just starts as "not saved" */ }
+      }
+      renderPlace();
+      loadRecommendations();
+      loadReviews().catch(function (err) { showMessage(document.getElementById("review-msg"), err.message, "error"); });
+      loadTripForm().catch(function (err) { showMessage(document.getElementById("trip-msg"), err.message, "error"); });
+    }
+    start();
+  </script>
+</body>
+</html>

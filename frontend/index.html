@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Explore - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <h1>Explore a city</h1>
+
+    <form id="search-form" class="card">
+      <div class="row">
+        <div style="flex: 2 1 220px;">
+          <label for="city">City</label>
+          <input id="city" list="city-list" placeholder="e.g. Mangalore" required>
+          <datalist id="city-list"></datalist>
+        </div>
+        <div>
+          <label for="category">Category</label>
+          <select id="category">
+            <option value="">All</option>
+            <option>Hotel</option>
+            <option>Restaurant</option>
+            <option>Attraction</option>
+          </select>
+        </div>
+        <div>
+          <label for="min-rating">Min rating</label>
+          <select id="min-rating">
+            <option value="">Any</option>
+            <option value="3">3+</option>
+            <option value="3.5">3.5+</option>
+            <option value="4">4+</option>
+            <option value="4.5">4.5+</option>
+          </select>
+        </div>
+        <div>
+          <label for="sort">Sort by</label>
+          <select id="sort">
+            <option value="rating">Rating (high to low)</option>
+            <option value="cost">Cost (low to high)</option>
+            <option value="name">Name</option>
+            <option value="distance">Distance from a point</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top: 12px;">
+        <div>
+          <label for="ref-lat">Reference latitude (for distance)</label>
+          <input id="ref-lat" type="number" step="any" min="-90" max="90" placeholder="12.9141">
+        </div>
+        <div>
+          <label for="ref-lng">Reference longitude</label>
+          <input id="ref-lng" type="number" step="any" min="-180" max="180" placeholder="74.8560">
+        </div>
+        <div style="flex: 0 0 auto;">
+          <button type="button" id="use-location" class="secondary">Use my location</button>
+        </div>
+        <div style="flex: 0 0 auto;">
+          <button type="submit" id="search-btn">Search</button>
+        </div>
+      </div>
+    </form>
+
+    <div id="msg" class="msg"></div>
+    <div id="summary" class="muted" style="margin-bottom: 10px;"></div>
+    <div id="results" class="grid"></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    renderNav("explore");
+
+    const form = document.getElementById("search-form");
+    const msg = document.getElementById("msg");
+    const summary = document.getElementById("summary");
+    const results = document.getElementById("results");
+    const searchBtn = document.getElementById("search-btn");
+
+    // Suggest the cities that are already saved in the database
+    api("/cities", { auth: false })
+      .then(function (cities) {
+        document.getElementById("city-list").innerHTML = cities
+          .map(function (c) { return '<option value="' + esc(c.name) + '">'; })
+          .join("");
+      })
+      .catch(function () { /* suggestions are optional */ });
+
+    // Fill latitude and longitude from the browser's location
+    document.getElementById("use-location").addEventListener("click", function () {
+      if (!navigator.geolocation) {
+        showMessage(msg, "Your browser does not support location.", "error");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          document.getElementById("ref-lat").value = pos.coords.latitude.toFixed(6);
+          document.getElementById("ref-lng").value = pos.coords.longitude.toFixed(6);
+        },
+        function () { showMessage(msg, "Could not get your location.", "error"); }
+      );
+    });
+
+    function placeCard(p) {
+      let distance = "";
+      if (p.distance_km !== null && p.distance_km !== undefined) {
+        distance = '<span class="muted small">' + Number(p.distance_km).toFixed(1) + " km away</span>";
+      }
+      return (
+        '<div class="card place-card" style="margin:0;">' +
+        '<h3><a href="place.html?id=' + p.place_id + '">' + esc(p.name) + "</a></h3>" +
+        '<div class="muted small">' + esc(p.city) + "</div>" +
+        '<div class="meta">' +
+        '<span class="badge ' + esc(p.category) + '">' + esc(p.category) + "</span>" +
+        "<span>" + stars(p.rating) + "</span>" +
+        "<span>" + (Number(p.avg_cost) > 0 ? money(p.avg_cost) : "Free / n.a.") + "</span>" +
+        distance +
+        "</div></div>"
+      );
+    }
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      showMessage(msg, "");
+      summary.textContent = "";
+      results.innerHTML = "";
+
+      const city = document.getElementById("city").value.trim();
+      const sort = document.getElementById("sort").value;
+      const lat = document.getElementById("ref-lat").value;
+      const lng = document.getElementById("ref-lng").value;
+
+      if (sort === "distance" && (lat === "" || lng === "")) {
+        showMessage(msg, "To sort by distance, enter a reference latitude and longitude.", "error");
+        return;
+      }
+      if ((lat === "") !== (lng === "")) {
+        showMessage(msg, "Enter both latitude and longitude, or leave both empty.", "error");
+        return;
+      }
+
+      // Only send the filters the user actually chose
+      const params = new URLSearchParams();
+      params.set("sort", sort);
+      if (document.getElementById("category").value) params.set("category", document.getElementById("category").value);
+      if (document.getElementById("min-rating").value) params.set("min_rating", document.getElementById("min-rating").value);
+      if (lat !== "") {
+        params.set("ref_lat", lat);
+        params.set("ref_lng", lng);
+      }
+
+      searchBtn.disabled = true;
+      summary.textContent = "Loading... a brand new city can take a few seconds the first time (it is fetched once and then saved).";
+      try {
+        const data = await api("/cities/" + encodeURIComponent(city) + "/places?" + params.toString());
+        summary.innerHTML =
+          esc(data.count) + " places in <strong>" + esc(data.city) + "</strong> " +
+          '<span class="badge ' + esc(data.source) + '">' +
+          (data.source === "api" ? "Fetched live, now cached" : "Served from MySQL cache") +
+          "</span>";
+        results.innerHTML = data.places.length
+          ? data.places.map(placeCard).join("")
+          : '<p class="muted">No places match these filters.</p>';
+      } catch (err) {
+        summary.textContent = "";
+        showMessage(msg, err.message, "error");
+      }
+      searchBtn.disabled = false;
+    });
+  </script>
+</body>
+</html>

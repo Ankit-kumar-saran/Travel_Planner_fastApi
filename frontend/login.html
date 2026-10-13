@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <div class="card narrow">
+      <h1>Login</h1>
+      <div id="msg" class="msg"></div>
+      <form id="login-form">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" required>
+        </div>
+        <button type="submit" id="submit-btn">Login</button>
+      </form>
+      <p class="small"><a href="forgot-password.html">Forgot password?</a> &middot; <a href="register.html">Create an account</a></p>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    renderNav("login");
+    const msg = document.getElementById("msg");
+
+    // After login we go back to the page the user came from (only simple page names are allowed)
+    function nextPage() {
+      const next = param("next");
+      return next && /^[a-z-]+\.html(\?[\w=&%.-]*)?$/i.test(next) ? next : "index.html";
+    }
+
+    document.getElementById("login-form").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      const button = document.getElementById("submit-btn");
+      button.disabled = true;
+      showMessage(msg, "");
+      try {
+        // 1. log in and get the token
+        const login = await api("/auth/login", {
+          method: "POST",
+          auth: false,
+          body: {
+            email: document.getElementById("email").value.trim(),
+            password: document.getElementById("password").value,
+          },
+        });
+        // 2. save the token, then ask "who am I?" so the navbar can show the name and role
+        localStorage.setItem("token", login.access_token);
+        const me = await api("/users/me");
+        saveLogin(login.access_token, me);
+        window.location.href = nextPage();
+      } catch (err) {
+        clearLogin();
+        showMessage(msg, err.message, "error");
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

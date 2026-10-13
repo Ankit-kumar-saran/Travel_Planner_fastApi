@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <h1>Admin dashboard</h1>
+    <div id="msg" class="msg"></div>
+    <div id="content" class="hidden">
+
+      <div class="stats" id="totals"></div>
+      <div class="two-col">
+        <div class="stat"><div class="label">Most searched city</div><div class="value" id="top-city">-</div></div>
+        <div class="stat"><div class="label">Most saved place</div><div class="value" id="top-place">-</div></div>
+      </div>
+
+      <h2>Searches in the last 7 days</h2>
+      <div class="card">
+        <div id="chart" class="chart"></div>
+        <div class="muted small" style="margin-top:8px;">Every day is shown, even days with zero searches. Hover a bar to see the number of active users.</div>
+      </div>
+
+      <h2>City statistics</h2>
+      <div id="city-stats"></div>
+    </div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    if (requireLogin()) {
+      renderNav("admin");
+      const msg = document.getElementById("msg");
+
+      function stat(label, value) {
+        return '<div class="stat"><div class="label">' + label + '</div><div class="value">' + esc(value) + "</div></div>";
+      }
+
+      async function load() {
+        try {
+          const overview = await api("/admin/overview");
+          const activity = await api("/admin/activity-7d");
+          const cities = await api("/admin/city-stats");
+
+          document.getElementById("totals").innerHTML =
+            stat("Registered users", overview.total_users) +
+            stat("Cached cities", overview.cached_cities) +
+            stat("Cached places", overview.cached_places);
+
+          document.getElementById("top-city").textContent = overview.most_searched_city
+            ? overview.most_searched_city.name + " (" + overview.most_searched_city.search_count + " searches)"
+            : "No searches yet";
+          document.getElementById("top-place").textContent = overview.most_saved_place
+            ? overview.most_saved_place.name + " (" + overview.most_saved_place.save_count + " saves)"
+            : "No favorites yet";
+
+          // Simple bar chart made of divs (no chart library)
+          const max = Math.max(1, ...activity.map(function (r) { return r.searches; }));
+          document.getElementById("chart").innerHTML = activity
+            .map(function (r) {
+              const height = Math.round((r.searches / max) * 100);
+              return (
+                '<div class="chart-col" title="' + esc(r.day) + ": " + r.searches + " searches, " + r.active_users + ' active users">' +
+                '<div class="chart-val">' + r.searches + "</div>" +
+                '<div class="chart-bar' + (r.searches === 0 ? " zero" : "") + '" style="height:' + height + '%"></div>' +
+                '<div class="chart-label">' + esc(r.day.slice(5)) + "</div></div>"
+              );
+            })
+            .join("");
+
+          document.getElementById("city-stats").innerHTML = cities.length
+            ? "<table><tr><th>City</th><th>Cached places</th><th>Average cost</th><th>Top category</th></tr>" +
+              cities.map(function (c) {
+                return (
+                  "<tr><td>" + esc(c.city) + "</td><td>" + c.cached_places + "</td>" +
+                  "<td>" + (c.avg_cost === null ? "-" : money(c.avg_cost)) + "</td>" +
+                  "<td>" + esc(c.top_category || "-") + "</td></tr>"
+                );
+              }).join("") + "</table>"
+            : '<p class="muted">No cities yet.</p>';
+
+          document.getElementById("content").classList.remove("hidden");
+        } catch (err) {
+          showMessage(msg, err.message === "Admin access required"
+            ? "This page is only for admins. Ask for the admin role (see README)."
+            : err.message, "error");
+        }
+      }
+      load();
+    }
+  </script>
+</body>
+</html>

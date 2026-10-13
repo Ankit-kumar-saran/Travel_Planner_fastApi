@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Favorites - WanderSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header><div class="wrap"><a class="brand" href="index.html">WanderSync</a><nav id="nav"></nav></div></header>
+
+  <main class="wrap">
+    <h1>My favorites</h1>
+    <div id="msg" class="msg"></div>
+    <div id="list" class="grid"></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    if (requireLogin()) {
+      renderNav("favorites");
+      const msg = document.getElementById("msg");
+      const list = document.getElementById("list");
+
+      function card(p) {
+        return (
+          '<div class="card place-card" style="margin:0;">' +
+          '<h3><a href="place.html?id=' + p.place_id + '">' + esc(p.name) + "</a></h3>" +
+          '<div class="muted small">' + esc(p.city) + "</div>" +
+          '<div class="meta">' +
+          '<span class="badge ' + esc(p.category) + '">' + esc(p.category) + "</span>" +
+          "<span>" + stars(p.rating) + "</span>" +
+          "<span>" + (Number(p.avg_cost) > 0 ? money(p.avg_cost) : "Free / n.a.") + "</span></div>" +
+          '<div style="margin-top:10px;"><button class="secondary small-btn" data-remove="' + p.place_id + '">Remove</button></div>' +
+          "</div>"
+        );
+      }
+
+      async function load() {
+        try {
+          const favs = await api("/favorites");
+          list.innerHTML = favs.length
+            ? favs.map(card).join("")
+            : '<p class="muted">Nothing saved yet. <a href="index.html">Explore a city</a> and tap the heart on a place.</p>';
+        } catch (err) {
+          showMessage(msg, err.message, "error");
+        }
+      }
+
+      // One click listener for all "Remove" buttons (they are created by JavaScript)
+      list.addEventListener("click", async function (event) {
+        const id = event.target.getAttribute("data-remove");
+        if (!id) return;
+        try {
+          await api("/favorites/" + id, { method: "DELETE" });
+          load();
+        } catch (err) {
+          showMessage(msg, err.message, "error");
+        }
+      });
+
+      load();
+    }
+  </script>
+</body>
+</html>
